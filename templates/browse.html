@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}세션 목록 — GDC Vault 브라우저{% endblock %}
+
+{% block content %}
+<!-- 필터 -->
+<form method="get" action="/browse" class="filters">
+  <fieldset role="group">
+    <select name="event" aria-label="이벤트 선택">
+      {% for ev in events %}
+      <option value="{{ ev.slug }}" {% if ev.slug == current_event %}selected{% endif %}>
+        {{ ev.name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <select name="category" aria-label="카테고리 선택">
+      <option value="">전체 카테고리</option>
+      {% for code, name in categories.items() %}
+      <option value="{{ code }}" {% if code == current_category %}selected{% endif %}>
+        {{ name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">검색</button>
+  </fieldset>
+</form>
+
+<!-- 세션 수 -->
+<p>총 <strong>{{ sessions|length }}</strong>개 세션</p>
+
+<!-- 세션 목록 -->
+{% if sessions %}
+<div class="session-list">
+  {% for s in sessions %}
+  <article class="session-card" data-url="{{ s.play_url }}">
+    <div class="session-card-body">
+      {% if s.thumbnail %}
+      <img src="{{ s.thumbnail }}" alt="" class="session-thumb" loading="lazy">
+      {% endif %}
+      <div class="session-info">
+        <h4>
+          <a href="/session/{{ s.play_url.split('/play/')[-1] }}">{{ s.title }}</a>
+        </h4>
+        {% if s.speakers %}
+        <p class="speaker">{{ s.speakers }}{% if s.company %} — {{ s.company }}{% endif %}</p>
+        {% endif %}
+        {% if s.category %}
+        <small class="category-tag">{{ s.category }}</small>
+        {% endif %}
+        {% if s.vault_free %}
+        <small class="free-tag">FREE</small>
+        {% endif %}
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p>세션을 찾을 수 없습니다. 다른 필터를 시도해 보세요.</p>
+{% endif %}
+
+<!-- 세션 상세 모달 -->
+<dialog id="session-detail">
+  <article>
+    <header>
+      <button aria-label="닫기" rel="prev" class="close-detail"></button>
+      <h3 id="detail-title">로딩 중...</h3>
+    </header>
+    <div id="detail-body">
+      <p aria-busy="true">세션 정보를 불러오는 중...</p>
+    </div>
+    <footer>
+      <button class="close-detail outline secondary">닫기</button>
+    </footer>
+  </article>
+</dialog>
+{% endblock %}

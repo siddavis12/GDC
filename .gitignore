@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+
+# 로컬 환경 설정
+CLAUDE.local.md
+.claude/settings.local.json
+.env
+.env.local
+
+# 디버그용 임시 파일
+debug_*.html
+debug_*.js
+
+# 자막 추출 결과물
+transcripts/
+
+# MCP/에디터 캐시
+.playwright-mcp/
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log

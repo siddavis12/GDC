@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}로그인 — GDC Vault 브라우저{% endblock %}
+
+{% block content %}
+<article>
+  <header>
+    <h2>GDC Vault 로그인</h2>
+    <p>GDC Vault 계정으로 로그인하세요. 자격 증명은 서버 메모리에만 유지됩니다.</p>
+  </header>
+
+  {% if error %}
+  <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/login">
+    <label for="email">이메일</label>
+    <input type="email" id="email" name="email" placeholder="you@example.com" required autofocus>
+
+    <label for="password">비밀번호</label>
+    <input type="password" id="password" name="password" required>
+
+    <button type="submit">로그인</button>
+  </form>
+</article>
+{% endblock %}

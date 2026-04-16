@@ -1,0 +1,237 @@
+/* GDC Vault 브라우저 커스텀 스타일 */
+
+/* 에러 메시지 */
+.error {
+  color: var(--pico-color-red-500, #e53935);
+  font-weight: bold;
+}
+
+/* 플래시 메시지 */
+.flash {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+/* 필터 폼 */
+.filters {
+  margin-bottom: 1.5rem;
+}
+
+/* 세션 카드 */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-card {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.session-card:hover {
+  border-color: var(--pico-primary);
+}
+
+.session-card-body {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.session-thumb {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.session-info h4 {
+  margin-bottom: 0.25rem;
+  font-size: 1rem;
+}
+
+.session-info h4 a {
+  text-decoration: none;
+}
+
+.session-info .speaker {
+  margin-bottom: 0.25rem;
+  opacity: 0.8;
+  font-size: 0.9rem;
+}
+
+.category-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  background: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+  font-size: 0.75rem;
+}
+
+.free-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  background: var(--pico-color-green-600, #43a047);
+  color: #fff;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+
+/* 세션 상세 */
+#session-detail article {
+  max-width: 800px;
+}
+
+/* 세션 상세 메타데이터 (grid 라벨-값) */
+.detail-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.detail-meta dt {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--pico-muted-color, #6c757d);
+  align-self: baseline;
+}
+
+.detail-meta dd {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Overview 섹션 */
+.detail-overview {
+  margin: 1rem 0;
+}
+
+.overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.overview-header h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--pico-muted-color, #6c757d);
+  margin: 0;
+}
+
+.overview-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.overview-tab {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--pico-muted-border-color, #ccc);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--pico-muted-color, #6c757d);
+  cursor: pointer;
+  line-height: 1.4;
+  margin: 0;
+  width: auto;
+}
+
+.overview-tab.active {
+  background: var(--pico-primary);
+  color: var(--pico-primary-inverse, #fff);
+  border-color: var(--pico-primary);
+}
+
+.overview-text {
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* 태그 pill */
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.tag-pill {
+  --tag-hue: 200;
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: hsl(var(--tag-hue) 55% 92%);
+  color: hsl(var(--tag-hue) 50% 30%);
+  line-height: 1.5;
+}
+
+/* 다크 모드 태그 pill */
+@media (prefers-color-scheme: dark) {
+  .tag-pill {
+    background: hsl(var(--tag-hue) 40% 22%);
+    color: hsl(var(--tag-hue) 60% 78%);
+  }
+}
+
+/* 추출 버튼 영역 */
+.extract-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+}
+
+.extract-section .result {
+  margin-top: 1rem;
+}
+
+.extract-section .result a {
+  margin-right: 1rem;
+}
+
+/* 진행 상태 */
+.progress-msg {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .session-thumb {
+    width: 80px;
+    height: 45px;
+  }
+
+  .session-card-body {
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .detail-meta {
+    grid-template-columns: 1fr;
+    gap: 0.15rem 0;
+  }
+
+  .detail-meta dt {
+    margin-top: 0.5rem;
+  }
+
+  .detail-meta dd {
+    margin-left: 0;
+  }
+}
