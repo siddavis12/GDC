@@ -15,6 +15,7 @@ GDC Vault 영상에서 자막(VTT)을 추출하여
 
 import argparse
 import asyncio
+import logging
 import re
 import sys
 import time
@@ -26,6 +27,8 @@ try:
 except ImportError:
   print("aiohttp가 필요합니다: pip install aiohttp")
   sys.exit(1)
+
+log = logging.getLogger(__name__)
 
 
 # 자막 언어 코드 매핑
@@ -233,7 +236,20 @@ async def download_segments(session, segment_urls, max_concurrent=20):
   return results
 
 
-async def extract_transcript(url, lang="eng", output_dir=None, session=None, video_id=None):
+async def extract_transcript(
+  url,
+  lang="eng",
+  output_dir=None,
+  session=None,
+  video_id=None,
+  detail=None,
+  include_chapters: bool = False,
+  include_glossary: bool = False,
+  include_keypoints: bool = False,
+  include_qa: bool = False,
+  include_articles: bool = False,
+  include_thumbnail: bool = False,
+):
   """메인 추출 함수
 
   Args:
@@ -242,6 +258,9 @@ async def extract_transcript(url, lang="eng", output_dir=None, session=None, vid
     output_dir: 출력 디렉토리
     session: 외부에서 주입할 aiohttp.ClientSession (None이면 새로 생성)
     video_id: 파일명에 사용할 ID (None이면 URL에서 추출)
+    detail: scraper.SessionDetail (선택) — 메타 헤더/번들용. None이면 CLI에서 추정
+    include_chapters/glossary/keypoints/articles/thumbnail: 번들에 포함할 구성 요소.
+      어느 하나라도 True면 번들 ZIP이 생성된다. 모두 False면 기존 3종 파일만 출력.
   """
   if output_dir is None:
     output_dir = Path(".")
@@ -309,7 +328,7 @@ async def extract_transcript(url, lang="eng", output_dir=None, session=None, vid
     merged = merge_entries(all_entries)
     print(f"  총 {len(merged)}개 자막 항목 추출")
 
-    # 영상 ID 추출 (파일명용)
+    # 세션 ID 추출 (파일명/폴더용)
     if video_id is None:
       video_id = "gdc_transcript"
       id_match = re.search(r"/play/(\d+)", url)
@@ -321,24 +340,140 @@ async def extract_transcript(url, lang="eng", output_dir=None, session=None, vid
         if id_match:
           video_id = f"gdc_{id_match.group(1)[:12]}"
 
-    # 파일 출력
-    # VTT 파일
-    vtt_path = output_dir / f"{video_id}_{lang}.vtt"
+    # ── 세션별 하위 폴더 ──
+    safe_dir = re.sub(r"[^a-zA-Z0-9_-]", "", video_id) or "gdc_session"
+    session_dir = output_dir / safe_dir
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    # 기본 파일 (언어 suffix 없이 단순 이름)
+    # NotebookLM이 .vtt 확장자를 거절하므로 .txt로 저장.
+    # 내용은 WebVTT 포맷 그대로 — 첫 줄 "WEBVTT" 로 포맷 식별 가능.
+    vtt_path = session_dir / "subtitle.txt"
     vtt_path.write_text(format_vtt(merged), encoding="utf-8")
     print(f"  저장: {vtt_path}")
 
-    # 타임스탬프 포함 텍스트
-    ts_path = output_dir / f"{video_id}_{lang}_timestamped.txt"
+    ts_path = session_dir / "transcript_timed.txt"
     ts_path.write_text(format_timestamped_text(merged), encoding="utf-8")
     print(f"  저장: {ts_path}")
 
-    # 깔끔한 텍스트 (NotebookLM용)
-    txt_path = output_dir / f"{video_id}_{lang}.txt"
-    txt_path.write_text(format_text(merged), encoding="utf-8")
+    txt_path = session_dir / "transcript.txt"
+    plain_text = format_text(merged)
+    txt_path.write_text(plain_text, encoding="utf-8")
     print(f"  저장: {txt_path}")
 
-    print(f"\n완료! NotebookLM에는 {txt_path.name} 파일을 업로드하세요.")
-    return txt_path
+    wants_enhancement = any([
+      include_chapters, include_glossary, include_keypoints, include_qa,
+      include_articles, include_thumbnail,
+    ])
+
+    if not wants_enhancement:
+      print(f"\n완료! {session_dir} 에 3개 파일이 저장되었습니다.")
+      return txt_path
+
+    # ── 확장: Claude + Perplexity 후처리 및 번들 생성 ──
+    from config import AI_ENHANCE_ENABLED, WEB_CONTEXT_ENABLED
+
+    # 영상 총 길이 (마지막 entry의 end 시각에서 초 단위)
+    max_seconds = 0
+    if merged:
+      last_ts = merged[-1]["end"][:8]  # HH:MM:SS
+      try:
+        h, m, s = last_ts.split(":")
+        max_seconds = int(h) * 3600 + int(m) * 60 + int(s)
+      except ValueError:
+        max_seconds = 0
+
+    timed_text = format_timestamped_text(merged)
+
+    enhancement = None
+    needs_claude = include_chapters or include_glossary or include_keypoints or include_qa
+    # 엔티티는 관련 기사 검색에도 필요하므로 articles 옵션 시 엔티티 추출
+    needs_entities = include_articles
+
+    if needs_claude or needs_entities:
+      if AI_ENHANCE_ENABLED:
+        print(f"[5/6] Claude 후처리 중 "
+              f"(챕터={include_chapters}, 용어집={include_glossary}, "
+              f"핵심포인트={include_keypoints}, QA={include_qa})")
+        from ai_enhance import SessionContext, enhance_transcript
+        ctx = None
+        if detail is not None:
+          ctx = SessionContext(
+            title=getattr(detail, "title", "") or "",
+            speakers=getattr(detail, "speakers", "") or "",
+            company=getattr(detail, "company", "") or "",
+            category=getattr(detail, "category", "") or "",
+            year=getattr(detail, "year", "") or "",
+            tags=list(getattr(detail, "tags", []) or []),
+            overview=getattr(detail, "overview", "") or "",
+          )
+        try:
+          enhancement = await enhance_transcript(
+            transcript_plain=plain_text,
+            transcript_timed=timed_text,
+            max_seconds=max_seconds,
+            context=ctx,
+            include_chapters=include_chapters,
+            include_glossary=include_glossary,
+            include_keypoints=include_keypoints,
+            include_qa=include_qa,
+            include_entities=needs_entities,
+          )
+        except Exception as e:
+          log.exception("Claude 후처리 실패: %s", e)
+      else:
+        print(f"[5/6] Claude 비활성화 또는 API 키 없음 — 스킵")
+
+    related_md = ""
+    if include_articles:
+      if WEB_CONTEXT_ENABLED and detail is not None:
+        print(f"[6/6] Perplexity로 관련 기사 검색 중...")
+        from web_context import find_related_articles
+        try:
+          entities = enhancement.keypoint_entities if enhancement else []
+          related_md = await find_related_articles(
+            title=getattr(detail, "title", ""),
+            speakers=getattr(detail, "speakers", ""),
+            company=getattr(detail, "company", ""),
+            year=getattr(detail, "year", ""),
+            tags=getattr(detail, "tags", []) or [],
+            entities=entities or [],
+          )
+        except Exception as e:
+          log.exception("Perplexity 검색 실패: %s", e)
+      else:
+        if detail is None:
+          log.info("detail이 없어 관련 기사 검색 건너뜀")
+        else:
+          log.info("Perplexity 비활성화 또는 API 키 없음 — 스킵")
+
+    # 번들 생성: session_dir에 추가 파일을 쓰고 같은 이름의 ZIP을 부모 디렉토리에 생성
+    from bundler import BundleInputs, build_bundle
+    safe_id = safe_dir.replace("gdc_", "") or "session"
+    inputs = BundleInputs(
+      session_id=safe_id,
+      session_dir=session_dir,
+      title=getattr(detail, "title", "") if detail else "",
+      play_url=getattr(detail, "play_url", "") if detail else "",
+      speakers=getattr(detail, "speakers", "") if detail else "",
+      company=getattr(detail, "company", "") if detail else "",
+      category=getattr(detail, "category", "") if detail else "",
+      overview=getattr(detail, "overview", "") if detail else "",
+      tags=getattr(detail, "tags", []) if detail else [],
+      year=getattr(detail, "year", "") if detail else "",
+      vault_free=getattr(detail, "vault_free", False) if detail else False,
+      thumbnail_url=getattr(detail, "thumbnail", "") if detail and include_thumbnail else "",
+      main_txt_path=txt_path,
+      chapters_md=enhancement.chapters_md if enhancement and include_chapters else "",
+      glossary_md=enhancement.glossary_md if enhancement and include_glossary else "",
+      keypoints_md=enhancement.keypoints_md if enhancement and include_keypoints else "",
+      qa_md=enhancement.qa_md if enhancement and include_qa else "",
+      related_articles_md=related_md,
+    )
+    zip_path = await build_bundle(inputs, aio_session=session)
+    print(f"  번들 ZIP: {zip_path}")
+    print(f"\n완료! NotebookLM에는 {zip_path.name}을 업로드(또는 언집 후 업로드)하세요.")
+    return zip_path
 
   finally:
     # 직접 생성한 세션만 닫기
@@ -370,13 +505,67 @@ def main():
     default="./transcripts",
     help="출력 디렉토리 (기본: ./transcripts)",
   )
+  parser.add_argument(
+    "--enhance",
+    action="store_true",
+    help="--chapters --glossary --keypoints --qa --articles --thumbnail 를 한 번에 켜는 단축 옵션",
+  )
+  parser.add_argument("--chapters", action="store_true", help="Claude로 챕터 생성")
+  parser.add_argument("--glossary", action="store_true", help="Claude로 용어집 생성")
+  parser.add_argument("--keypoints", action="store_true", help="Claude로 핵심 포인트 생성")
+  parser.add_argument("--qa", action="store_true", help="Claude로 Q&A 섹션 추출")
+  parser.add_argument("--articles", action="store_true", help="Perplexity로 관련 기사 검색")
+  parser.add_argument("--thumbnail", action="store_true", help="세션 썸네일 저장")
   args = parser.parse_args()
+  if args.enhance:
+    args.chapters = True
+    args.glossary = True
+    args.keypoints = True
+    args.qa = True
+    args.articles = True
+    args.thumbnail = True
+
+  logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+  )
 
   print("=" * 50)
   print("GDC Vault 자막 추출기")
   print("=" * 50)
 
-  asyncio.run(extract_transcript(args.url, args.lang, args.output))
+  asyncio.run(_cli_run(args))
+
+
+async def _cli_run(args):
+  """CLI 실행. GDC Vault URL이면 scraper로 detail을 먼저 가져옵니다."""
+  any_enhance = any([
+    args.chapters, args.glossary, args.keypoints, args.qa,
+    args.articles, args.thumbnail,
+  ])
+  async with aiohttp.ClientSession() as session:
+    detail = None
+    if any_enhance and "gdcvault.com" in args.url:
+      try:
+        from scraper import GDCScraper
+        scraper = GDCScraper(session)
+        detail = await scraper.get_session_detail(args.url)
+        log.info("세션 메타데이터 로드: %s", detail.title or "(제목 없음)")
+      except Exception as e:
+        log.warning("메타데이터 로드 실패 (메타 헤더 없이 진행): %s", e)
+    await extract_transcript(
+      url=args.url,
+      lang=args.lang,
+      output_dir=args.output,
+      session=session,
+      detail=detail,
+      include_chapters=args.chapters,
+      include_glossary=args.glossary,
+      include_keypoints=args.keypoints,
+      include_qa=args.qa,
+      include_articles=args.articles,
+      include_thumbnail=args.thumbnail,
+    )
 
 
 if __name__ == "__main__":

@@ -146,22 +146,26 @@ document.addEventListener("DOMContentLoaded", () => {
       bodyEl.appendChild(tagWrap)
     }
 
-    // ── 추출 버튼 ──
+    // ── 추출 버튼 + 구성 요소 선택 ──
     const sessionId = data.play_url ? data.play_url.split("/play/").pop() : ""
     if (sessionId) {
       const section = document.createElement("div")
       section.className = "extract-section"
       if (data.m3u8_url) {
+        section.appendChild(renderComponentPicker())
+
         const btn = document.createElement("button")
         btn.className = "extract-btn"
         btn.dataset.id = sessionId
-        btn.textContent = "트랜스크립트 추출"
+        btn.textContent = "추출 시작"
         section.appendChild(btn)
+
         const result = document.createElement("div")
         result.className = "result"
         result.id = "extract-result"
         section.appendChild(result)
-        btn.addEventListener("click", () => handleExtract(sessionId))
+
+        btn.addEventListener("click", () => handleExtract(sessionId, section))
       } else {
         const msg = document.createElement("p")
         msg.className = "progress-msg"
@@ -172,30 +176,91 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function handleExtract(sessionId) {
-    const btn = document.querySelector(".extract-btn")
-    const resultDiv = document.getElementById("extract-result")
+  const COMPONENTS = [
+    { key: "include_chapters",  label: "챕터 자동 생성 (Claude)",        default: true },
+    { key: "include_glossary",  label: "용어집 (Claude)",                default: true },
+    { key: "include_keypoints", label: "핵심 포인트 (Claude)",           default: true },
+    { key: "include_qa",        label: "Q&A 섹션 별도 추출 (Claude)",    default: true },
+    { key: "include_articles",  label: "관련 해외 기사 (Perplexity)",    default: true },
+    { key: "include_thumbnail", label: "세션 썸네일 이미지",             default: true },
+  ]
+
+  function renderComponentPicker() {
+    const wrap = document.createElement("fieldset")
+    wrap.className = "component-picker"
+    const legend = document.createElement("legend")
+    legend.textContent = "추출할 구성 요소"
+    wrap.appendChild(legend)
+
+    const hint = document.createElement("p")
+    hint.className = "component-hint"
+    hint.textContent = "자막(subtitle.txt / transcript.txt / transcript_timed.txt)과 meta.md는 항상 생성됩니다."
+    wrap.appendChild(hint)
+
+    COMPONENTS.forEach(c => {
+      const row = document.createElement("label")
+      row.className = "component-row"
+      const cb = document.createElement("input")
+      cb.type = "checkbox"
+      cb.checked = c.default
+      cb.dataset.key = c.key
+      row.appendChild(cb)
+      row.appendChild(document.createTextNode(" " + c.label))
+      wrap.appendChild(row)
+    })
+    return wrap
+  }
+
+  function collectOptions(section) {
+    const options = {}
+    section.querySelectorAll(".component-row input[type=checkbox]").forEach(cb => {
+      options[cb.dataset.key] = cb.checked
+    })
+    return options
+  }
+
+  async function handleExtract(sessionId, section) {
+    const btn = section.querySelector(".extract-btn")
+    const resultDiv = section.querySelector("#extract-result")
+    const options = collectOptions(section)
+    const anyAI = options.include_chapters || options.include_glossary
+                || options.include_keypoints || options.include_qa
+                || options.include_articles
 
     btn.disabled = true
     btn.setAttribute("aria-busy", "true")
     btn.textContent = "추출 중..."
-    resultDiv.innerHTML = '<p class="progress-msg">자막을 다운로드하고 있습니다. 잠시 기다려 주세요...</p>'
+    const initialMsg = anyAI
+      ? "자막 다운로드 → AI 후처리 → ZIP 생성 (1–3분 소요)"
+      : "자막을 다운로드하고 있습니다..."
+    resultDiv.innerHTML = `<p class="progress-msg" aria-busy="true">${initialMsg}</p>`
 
     try {
-      const resp = await fetch(`/api/extract/${sessionId}`, { method: "POST" })
+      const resp = await fetch(`/api/extract/${sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options),
+      })
       const data = await resp.json()
 
       if (!resp.ok) {
         throw new Error(data.detail || data.error || "추출 실패")
       }
 
-      let html = "<p>추출 완료!</p>"
+      let html = "<p><strong>추출 완료!</strong></p>"
+      if (data.bundle_url) {
+        html += `<p><a href="${data.bundle_url}" role="button" class="primary bundle-download">
+          📦 NotebookLM 번들 다운로드 (${data.bundle})
+        </a></p>`
+        html += `<p class="bundle-hint">폴더: <code>transcripts/${data.session_dir}/</code></p>`
+      }
       if (data.files && data.files.length > 0) {
-        html += "<p>"
+        html += `<details><summary>개별 파일 (${data.files.length}개)</summary><p>`
+        const sid = data.session_dir.replace(/^gdc_/, "")
         data.files.forEach(f => {
-          html += `<a href="/api/download/${f}" role="button" class="outline">${f}</a> `
+          html += `<a href="/api/download/${sid}/${f}" role="button" class="outline">${f}</a> `
         })
-        html += "</p>"
+        html += "</p></details>"
       }
       resultDiv.innerHTML = html
     } catch (err) {
@@ -203,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       btn.disabled = false
       btn.removeAttribute("aria-busy")
-      btn.textContent = "트랜스크립트 추출"
+      btn.textContent = "추출 시작"
     }
   }
 })

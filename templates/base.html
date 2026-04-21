@@ -6,7 +6,7 @@
   <title>{% block title %}GDC Vault 브라우저{% endblock %}</title>
   <!-- Pico CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
 </head>
 <body>
   <header class="container">
@@ -38,6 +38,6 @@
     <small>GDC Vault 트랜스크립트 브라우저 — 개인 학습용</small>
   </footer>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v={{ asset_version }}"></script>
 </body>
 </html>

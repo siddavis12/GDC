@@ -6,7 +6,7 @@ import logging
 import re
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
+from fastapi import Body, FastAPI, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,6 +27,21 @@ log = logging.getLogger(__name__)
 app = FastAPI(title="GDC Vault 브라우저")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+def _compute_asset_version() -> str:
+  """static/app.js와 style.css mtime 중 최신값으로 cache-busting 토큰 생성"""
+  try:
+    js = Path("static/app.js").stat().st_mtime
+    css = Path("static/style.css").stat().st_mtime
+    return str(int(max(js, css)))
+  except OSError:
+    return "0"
+
+
+# 모든 Jinja 템플릿에서 {{ asset_version }}으로 참조 가능
+# uvicorn --reload가 파일 변경 시 프로세스를 재시작하므로 자동 갱신됨
+templates.env.globals["asset_version"] = _compute_asset_version()
 
 # 전역 인증 객체 (단일 사용자용)
 gdc_auth = GDCAuth()
@@ -194,10 +209,29 @@ async def session_detail(request: Request, session_id: str):
 
 
 @app.post("/api/extract/{session_id:path}")
-async def extract_transcript(session_id: str):
-  """트랜스크립트 추출 API"""
+async def extract_transcript(
+  session_id: str,
+  options: dict = Body(default_factory=dict),
+):
+  """트랜스크립트 추출 API.
+
+  options JSON body로 구성 요소 선택:
+    include_chapters, include_glossary, include_keypoints, include_qa,
+    include_articles, include_thumbnail (모두 기본 True)
+  """
   if not gdc_auth.is_logged_in:
     return JSONResponse({"error": "로그인 필요"}, status_code=401)
+
+  def opt(key: str, default: bool = True) -> bool:
+    v = options.get(key, default)
+    return bool(v) if isinstance(v, bool) else str(v).lower() in ("1", "true", "yes")
+
+  include_chapters = opt("include_chapters")
+  include_glossary = opt("include_glossary")
+  include_keypoints = opt("include_keypoints")
+  include_qa = opt("include_qa")
+  include_articles = opt("include_articles")
+  include_thumbnail = opt("include_thumbnail")
 
   try:
     aio_session = await gdc_auth.ensure_session()
@@ -222,28 +256,62 @@ async def extract_transcript(session_id: str):
       output_dir=TRANSCRIPT_DIR,
       session=aio_session,
       video_id=f"gdc_{safe_id}",
+      detail=detail,
+      include_chapters=include_chapters,
+      include_glossary=include_glossary,
+      include_keypoints=include_keypoints,
+      include_qa=include_qa,
+      include_articles=include_articles,
+      include_thumbnail=include_thumbnail,
     )
 
-    # 생성된 파일 목록
-    prefix = f"gdc_{safe_id}_eng"
-    files = [
-      f.name for f in Path(TRANSCRIPT_DIR).glob(f"{prefix}*")
-    ]
-    files.sort()
+    # 생성된 세션 폴더와 ZIP 경로
+    session_dir = Path(TRANSCRIPT_DIR) / f"gdc_{safe_id}"
+    files = (
+      sorted(f.name for f in session_dir.iterdir() if f.is_file())
+      if session_dir.exists() else []
+    )
 
-    return JSONResponse({"ok": True, "files": files, "path": str(result_path)})
+    zip_name = f"gdc_{safe_id}.zip"
+    bundle_available = (Path(TRANSCRIPT_DIR) / zip_name).exists()
+
+    return JSONResponse({
+      "ok": True,
+      "session_dir": session_dir.name,
+      "files": files,
+      "path": str(result_path),
+      "bundle": zip_name if bundle_available else None,
+      "bundle_url": f"/api/download_bundle/{safe_id}" if bundle_available else None,
+    })
 
   except Exception as e:
     log.error("추출 실패 (session %s): %s", session_id, e)
     return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@app.get("/api/download/{filename}")
-async def download_file(filename: str):
-  """추출된 트랜스크립트 파일 다운로드"""
-  # 경로 탐색 방지
-  safe_name = Path(filename).name
-  file_path = Path(TRANSCRIPT_DIR) / safe_name
+@app.get("/api/download_bundle/{session_id:path}")
+async def download_bundle(session_id: str):
+  """세션 번들 ZIP 다운로드"""
+  safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", session_id.split("/")[0])
+  zip_path = Path(TRANSCRIPT_DIR) / f"gdc_{safe_id}.zip"
+  if not zip_path.exists():
+    return JSONResponse(
+      {"error": "번들이 아직 생성되지 않았습니다. 먼저 /api/extract를 호출하세요."},
+      status_code=404,
+    )
+  return FileResponse(
+    zip_path,
+    filename=zip_path.name,
+    media_type="application/zip",
+  )
+
+
+@app.get("/api/download/{session_id}/{filename}")
+async def download_file(session_id: str, filename: str):
+  """세션 폴더 내 개별 파일 다운로드"""
+  safe_session = re.sub(r"[^a-zA-Z0-9_-]", "", session_id.split("/")[0])
+  safe_name = Path(filename).name  # 경로 탐색 방지
+  file_path = Path(TRANSCRIPT_DIR) / f"gdc_{safe_session}" / safe_name
   if not file_path.exists():
     return JSONResponse({"error": "파일을 찾을 수 없습니다"}, status_code=404)
   return FileResponse(file_path, filename=safe_name)

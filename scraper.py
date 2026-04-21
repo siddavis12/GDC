@@ -136,8 +136,13 @@ class GDCScraper:
       # 연도 기준 내림차순 정렬 (최신이 맨 앞)
       def _year_key(e: dict[str, str]) -> int:
         m = re.search(r"(\d{2,4})", e["slug"])
-        yr = int(m.group(1)) if m else 0
-        return yr if yr > 100 else 2000 + yr
+        if not m:
+          return 0
+        yr = int(m.group(1))
+        if yr >= 1000:
+          return yr
+        # 2자리 연도: 00-49 → 2000년대, 50-99 → 1900년대
+        return 2000 + yr if yr < 50 else 1900 + yr
 
       events.sort(key=_year_key, reverse=True)
       log.info("이벤트 목록 동적 파싱 완료: %d개", len(events))

@@ -5,3 +5,5 @@ python-multipart>=0.0.18
 aiohttp>=3.11
 beautifulsoup4>=4.12
 deep-translator>=1.11
+python-dotenv>=1.0
+anthropic>=0.40
