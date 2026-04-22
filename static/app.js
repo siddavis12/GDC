@@ -177,12 +177,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const COMPONENTS = [
-    { key: "include_chapters",  label: "챕터 자동 생성 (Claude)",        default: true },
-    { key: "include_glossary",  label: "용어집 (Claude)",                default: true },
-    { key: "include_keypoints", label: "핵심 포인트 (Claude)",           default: true },
-    { key: "include_qa",        label: "Q&A 섹션 별도 추출 (Claude)",    default: true },
-    { key: "include_articles",  label: "관련 해외 기사 (Perplexity)",    default: true },
-    { key: "include_thumbnail", label: "세션 썸네일 이미지",             default: true },
+    { key: "include_chapters",     label: "챕터 자동 생성 (Claude)",          default: true },
+    { key: "include_glossary",     label: "용어집 (Claude)",                  default: true },
+    { key: "include_keypoints",    label: "핵심 포인트 (Claude)",             default: true },
+    { key: "include_qa",           label: "Q&A 섹션 별도 추출 (Claude)",      default: true },
+    { key: "include_design_brief", label: "슬라이드 비주얼 테마 브리프 (Claude)", default: true },
+    { key: "include_articles",     label: "관련 해외 기사 (Perplexity)",      default: true },
+    { key: "include_thumbnail",    label: "세션 썸네일 이미지",               default: true },
   ]
 
   function renderComponentPicker() {
@@ -225,7 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const options = collectOptions(section)
     const anyAI = options.include_chapters || options.include_glossary
                 || options.include_keypoints || options.include_qa
-                || options.include_articles
+                || options.include_design_brief || options.include_articles
 
     btn.disabled = true
     btn.setAttribute("aria-busy", "true")

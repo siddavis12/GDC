@@ -247,6 +247,7 @@ async def extract_transcript(
   include_glossary: bool = False,
   include_keypoints: bool = False,
   include_qa: bool = False,
+  include_design_brief: bool = False,
   include_articles: bool = False,
   include_thumbnail: bool = False,
 ):
@@ -363,7 +364,7 @@ async def extract_transcript(
 
     wants_enhancement = any([
       include_chapters, include_glossary, include_keypoints, include_qa,
-      include_articles, include_thumbnail,
+      include_design_brief, include_articles, include_thumbnail,
     ])
 
     if not wants_enhancement:
@@ -386,7 +387,10 @@ async def extract_transcript(
     timed_text = format_timestamped_text(merged)
 
     enhancement = None
-    needs_claude = include_chapters or include_glossary or include_keypoints or include_qa
+    needs_claude = (
+      include_chapters or include_glossary or include_keypoints
+      or include_qa or include_design_brief
+    )
     # 엔티티는 관련 기사 검색에도 필요하므로 articles 옵션 시 엔티티 추출
     needs_entities = include_articles
 
@@ -394,7 +398,8 @@ async def extract_transcript(
       if AI_ENHANCE_ENABLED:
         print(f"[5/6] Claude 후처리 중 "
               f"(챕터={include_chapters}, 용어집={include_glossary}, "
-              f"핵심포인트={include_keypoints}, QA={include_qa})")
+              f"핵심포인트={include_keypoints}, QA={include_qa}, "
+              f"디자인브리프={include_design_brief})")
         from ai_enhance import SessionContext, enhance_transcript
         ctx = None
         if detail is not None:
@@ -417,6 +422,7 @@ async def extract_transcript(
             include_glossary=include_glossary,
             include_keypoints=include_keypoints,
             include_qa=include_qa,
+            include_design_brief=include_design_brief,
             include_entities=needs_entities,
           )
         except Exception as e:
@@ -468,6 +474,10 @@ async def extract_transcript(
       glossary_md=enhancement.glossary_md if enhancement and include_glossary else "",
       keypoints_md=enhancement.keypoints_md if enhancement and include_keypoints else "",
       qa_md=enhancement.qa_md if enhancement and include_qa else "",
+      design_brief_md=(
+        enhancement.design_brief_md
+        if enhancement and include_design_brief else ""
+      ),
       related_articles_md=related_md,
     )
     zip_path = await build_bundle(inputs, aio_session=session)
@@ -508,12 +518,18 @@ def main():
   parser.add_argument(
     "--enhance",
     action="store_true",
-    help="--chapters --glossary --keypoints --qa --articles --thumbnail 를 한 번에 켜는 단축 옵션",
+    help="--chapters --glossary --keypoints --qa --design-brief --articles --thumbnail 를 한 번에 켜는 단축 옵션",
   )
   parser.add_argument("--chapters", action="store_true", help="Claude로 챕터 생성")
   parser.add_argument("--glossary", action="store_true", help="Claude로 용어집 생성")
   parser.add_argument("--keypoints", action="store_true", help="Claude로 핵심 포인트 생성")
   parser.add_argument("--qa", action="store_true", help="Claude로 Q&A 섹션 추출")
+  parser.add_argument(
+    "--design-brief",
+    dest="design_brief",
+    action="store_true",
+    help="Claude로 슬라이드 비주얼 테마 브리프 생성",
+  )
   parser.add_argument("--articles", action="store_true", help="Perplexity로 관련 기사 검색")
   parser.add_argument("--thumbnail", action="store_true", help="세션 썸네일 저장")
   args = parser.parse_args()
@@ -522,6 +538,7 @@ def main():
     args.glossary = True
     args.keypoints = True
     args.qa = True
+    args.design_brief = True
     args.articles = True
     args.thumbnail = True
 
@@ -541,7 +558,7 @@ async def _cli_run(args):
   """CLI 실행. GDC Vault URL이면 scraper로 detail을 먼저 가져옵니다."""
   any_enhance = any([
     args.chapters, args.glossary, args.keypoints, args.qa,
-    args.articles, args.thumbnail,
+    args.design_brief, args.articles, args.thumbnail,
   ])
   async with aiohttp.ClientSession() as session:
     detail = None
@@ -563,6 +580,7 @@ async def _cli_run(args):
       include_glossary=args.glossary,
       include_keypoints=args.keypoints,
       include_qa=args.qa,
+      include_design_brief=args.design_brief,
       include_articles=args.articles,
       include_thumbnail=args.thumbnail,
     )

@@ -217,7 +217,7 @@ async def extract_transcript(
 
   options JSON body로 구성 요소 선택:
     include_chapters, include_glossary, include_keypoints, include_qa,
-    include_articles, include_thumbnail (모두 기본 True)
+    include_design_brief, include_articles, include_thumbnail (모두 기본 True)
   """
   if not gdc_auth.is_logged_in:
     return JSONResponse({"error": "로그인 필요"}, status_code=401)
@@ -230,6 +230,7 @@ async def extract_transcript(
   include_glossary = opt("include_glossary")
   include_keypoints = opt("include_keypoints")
   include_qa = opt("include_qa")
+  include_design_brief = opt("include_design_brief")
   include_articles = opt("include_articles")
   include_thumbnail = opt("include_thumbnail")
 
@@ -261,6 +262,7 @@ async def extract_transcript(
       include_glossary=include_glossary,
       include_keypoints=include_keypoints,
       include_qa=include_qa,
+      include_design_brief=include_design_brief,
       include_articles=include_articles,
       include_thumbnail=include_thumbnail,
     )

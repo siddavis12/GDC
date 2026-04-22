@@ -40,11 +40,23 @@ class Article:
   date: str = ""
   summary: str = ""
 
-  def as_markdown_row(self) -> str:
-    date = self.date or "N/A"
-    title = self.title.replace("|", "\\|").strip()
-    summary = self.summary.replace("|", "\\|").replace("\n", " ").strip()
-    return f"| [{title}]({self.url}) | {self.domain} | {date} | {summary} |"
+  def as_markdown_block(self, index: int) -> str:
+    """AI 소비용 마크다운 블록 — 테이블 셀 제약 없이 구조화된 메타데이터."""
+    title = (self.title or "(제목 없음)").strip()
+    date = self.date.strip() if self.date else "N/A"
+    summary = self.summary.strip() or "(요약 없음)"
+    lines = [
+      f"## {index}. {title}",
+      "",
+      f"- **Source**: {self.domain}",
+      f"- **Date**: {date}",
+      f"- **URL**: {self.url}",
+      "",
+      "**Summary**",
+      "",
+      summary,
+    ]
+    return "\n".join(lines)
 
 
 def _domain_of(url: str) -> str:
@@ -285,19 +297,22 @@ def _format_markdown(articles: list[Article], queries: list[str]) -> str:
   if not articles:
     lines.append("*관련 기사를 찾지 못했습니다.*")
     lines.append("")
-    lines.append("**검색 쿼리:**")
+    lines.append("## 검색 쿼리")
+    lines.append("")
     for q in queries:
       lines.append(f"- {q}")
     return "\n".join(lines)
 
-  lines.append("| Title | Source | Date | Summary |")
-  lines.append("| --- | --- | --- | --- |")
-  for a in articles:
-    lines.append(a.as_markdown_row())
-
+  lines.append(f"총 {len(articles)}건 수집.")
   lines.append("")
-  lines.append("---")
-  lines.append("**검색 쿼리:**")
+  for idx, a in enumerate(articles, start=1):
+    lines.append(a.as_markdown_block(idx))
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+  lines.append("## 검색 쿼리")
+  lines.append("")
   for q in queries:
     lines.append(f"- {q}")
 

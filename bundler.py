@@ -38,6 +38,7 @@ class BundleInputs:
   glossary_md: str = ""
   keypoints_md: str = ""
   qa_md: str = ""
+  design_brief_md: str = ""
   related_articles_md: str = ""
 
 
@@ -160,6 +161,10 @@ async def build_bundle(
   qa_text = inputs.qa_md.strip()
   if qa_text and qa_text != "No Q&A section detected":
     (session_dir / "qa.md").write_text(inputs.qa_md, encoding="utf-8")
+  if inputs.design_brief_md.strip():
+    (session_dir / "design_brief.md").write_text(
+      inputs.design_brief_md, encoding="utf-8"
+    )
   if inputs.related_articles_md.strip():
     (session_dir / "related_articles.md").write_text(
       inputs.related_articles_md, encoding="utf-8"

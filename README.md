@@ -39,9 +39,9 @@ cp .env.example .env
 
 ### 웹 UI
 ```bash
-uvicorn app:app --reload --port 8000
+uvicorn app:app --reload --port 8100
 ```
-브라우저에서 `http://localhost:8000` 접속 후 GDC Vault 계정으로 로그인.
+브라우저에서 `http://localhost:8100` 접속 후 GDC Vault 계정으로 로그인.
 세션 상세 페이지에서 추출 옵션 체크박스(챕터/용어집/핵심포인트/Q&A/기사/썸네일)를 선택하고 "추출 시작".
 
 ### CLI

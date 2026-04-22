@@ -74,6 +74,7 @@ class EnhancementResult:
   glossary_md: str = ""
   keypoints_md: str = ""
   qa_md: str = ""
+  design_brief_md: str = ""
   keypoint_entities: list[str] = field(default_factory=list)
   usage_input: int = 0
   usage_output: int = 0
@@ -241,6 +242,101 @@ QA_SYSTEM = (
   "### Q<N>: <question paraphrased in one line>\n"
   "<speaker's answer summarized in 2-3 sentences>\n\n"
   "Use proper-noun spellings from <session_context> when applicable."
+)
+
+DESIGN_BRIEF_SYSTEM = (
+  "You are a visual design director writing a theme brief that a downstream "
+  "slide-generation AI (e.g. NotebookLM) will consume to style a "
+  "presentation deck about this GDC talk. The deck SHOULD carry the game's "
+  "COLOR PALETTE and TYPOGRAPHY throughout so it feels native to the "
+  "game's world. But ICONIC GAME MOTIFS — the signature objects and "
+  "symbols most associated with the game (gears, guns, swords, card "
+  "suits, specific character silhouettes, recurring props) — must be used "
+  "SPARINGLY: as small accents on the cover and section-divider slides "
+  "only, never repeated across every slide and never enlarged as "
+  "full-slide backgrounds. Audiences must focus on the talk's content; "
+  "the game vibe should come from palette and type, not from symbol "
+  "repetition.\n\n"
+  "Identify the primary game(s) from <session_context> (talk title, company) "
+  "and the transcript. Describe that game's visual identity — art style, "
+  "color palette, typography, signature motifs — with enough specificity "
+  "that a slide engine can reproduce the vibe. Draw on your own knowledge "
+  "of the game for well-known titles; cite hex codes and named font "
+  "families where you are confident.\n\n"
+  "ANTI-HALLUCINATION RULES:\n"
+  "  1. If the specific game's visuals are unknown to you, SAY SO explicitly "
+  "in each section instead of inventing details. Fall back to a genre-"
+  "appropriate generic theme (e.g., 'indie roguelike deckbuilder', 'AAA "
+  "tactical shooter') and label it as such.\n"
+  "  2. Never invent specific hex codes, font names, or motifs that you are "
+  "not confident about. Use placeholders like '(unknown — suggest warm indie "
+  "palette)' when uncertain.\n"
+  "  3. Use the canonical game title spelling from <session_context>.\n\n"
+  "Output STRICT Markdown in exactly this structure — no preamble, no extra "
+  "sections:\n\n"
+  "# Design Brief\n\n"
+  "## Subject\n"
+  "- **Game**: <canonical title, or 'N/A — talk is about [topic]' if not game-specific>\n"
+  "- **Genre / Category**: ...\n"
+  "- **Developer / Publisher**: ...\n"
+  "- **Confidence**: high | medium | low — one sentence on why\n\n"
+  "## Art Style & Mood\n"
+  "Two to four sentences describing the overall aesthetic, era references, "
+  "and emotional tone (e.g. 'retro CRT neon with smoky casino nostalgia').\n\n"
+  "## Color Palette\n"
+  "- **Primary**: `#HEX` — role description\n"
+  "- **Secondary**: `#HEX` — role description\n"
+  "- **Accent**: `#HEX` — role description\n"
+  "- **Background (dark)**: `#HEX` — role description\n"
+  "- **Background (light)**: `#HEX` — role description\n\n"
+  "## Typography\n"
+  "- **Display / Headings**: distinctive font or style that carries the "
+  "game's character (used on cover, section dividers, and slide titles)\n"
+  "- **Body**: a clean, highly legible font for bullets, captions, and "
+  "chart labels — prioritize readability over thematic match\n"
+  "- **Accent usage notes**: one sentence on weight/case/tracking\n\n"
+  "## Signature Motifs & Imagery\n"
+  "List 4–8 visual elements from the game's identity. Slide-generation "
+  "AIs tend to OVER-APPLY iconic symbols — repeating a gear, gun, sword, "
+  "or card glyph on every slide, or enlarging it as a background — which "
+  "destroys focus. Your job is to mark scope TIGHTLY so this does not "
+  "happen. Rules:\n"
+  "  1. Each motif must be scoped to ONE of: `cover accent`, "
+  "`section-divider icon`, `corner decoration`, `one-time accent`. Never "
+  "`every slide`, `repeating pattern`, or `full-slide background`.\n"
+  "  2. At most 1–2 motifs may be marked as the deck's recurring visual "
+  "signature, and even those must stay small (e.g. a small glyph beside "
+  "the page number). All other motifs should be one-time accents on "
+  "specific slides.\n"
+  "  3. Format each bullet as: `- **<motif>** — <scope keyword>. "
+  "<one-sentence usage guidance that reinforces restraint>.`\n"
+  "Good example: `- **Playing card suit glyphs** — section-divider icon. "
+  "Single small glyph beside the section number; not repeated on body "
+  "slides.`\n"
+  "Bad example (never produce this): `- Gears as a repeating background "
+  "pattern across all slides.`\n\n"
+  "## Avoid\n"
+  "Bulleted list of 4–6 visual tropes to avoid. MUST include BOTH of "
+  "these categories:\n"
+  "  - **Iconic-symbol overuse** (at least 2 items): e.g. 'Repeating the "
+  "game's iconic object (gear/gun/sword/card) on every slide', 'Enlarging "
+  "a signature symbol as a full-slide background or watermark behind "
+  "body text', 'Decorating every bullet point with a themed icon'.\n"
+  "  - **Generic-industry clashes** (at least 2 items) specific to this "
+  "game's identity: e.g. 'generic flat corporate blue', 'stock business "
+  "silhouettes'.\n\n"
+  "## Slide Theme Directive\n"
+  "One imperative paragraph (4–6 sentences) to the slide-generation AI. "
+  "State that the game's COLOR PALETTE and TYPOGRAPHY should carry "
+  "across the whole deck — including body slides — so the deck reads as "
+  "native to the game. But ICONIC MOTIFS (the symbols and objects most "
+  "identified with the game) must appear only as small accents on the "
+  "cover slide and section-divider slides; they must NOT repeat on every "
+  "body slide, be enlarged as full-slide backgrounds, sit behind body "
+  "text or charts, or decorate every bullet point. On body slides, rely "
+  "on the palette and typography alone to carry the theme — leave the "
+  "content area uncluttered. Readability and content focus take "
+  "precedence over symbolic immersion."
 )
 
 ENTITY_INSTRUCTION = (
@@ -448,6 +544,7 @@ async def enhance_transcript(
   include_keypoints: bool = True,
   include_entities: bool = True,
   include_qa: bool = True,
+  include_design_brief: bool = True,
   normalize: bool | None = None,
 ) -> EnhancementResult:
   """transcript에 대해 Claude 후처리를 선택적으로 병렬 실행.
@@ -469,7 +566,7 @@ async def enhance_transcript(
 
   requested = [
     include_chapters, include_glossary, include_keypoints,
-    include_entities, include_qa,
+    include_entities, include_qa, include_design_brief,
   ]
   if not any(requested):
     return EnhancementResult()
@@ -505,6 +602,14 @@ async def enhance_transcript(
       client, QA_SYSTEM, transcript_plain,
       "Produce the Q&A extraction now.",
       context=context, max_tokens=2500,
+    )))
+  if include_design_brief:
+    tasks["design_brief"] = asyncio.create_task(guarded(_call_claude(
+      client, DESIGN_BRIEF_SYSTEM, transcript_plain,
+      "Produce the design brief now. Prioritize accurate visual details for "
+      "the specific game identified from <session_context>. If unsure, say so "
+      "instead of inventing details.",
+      context=context, max_tokens=2048,
     )))
   if include_entities:
     tasks["entities"] = asyncio.create_task(guarded(
@@ -545,8 +650,12 @@ async def enhance_transcript(
   glossary_text, glossary_usage = _unwrap_call("glossary")
   keypoints_text, keypoints_usage = _unwrap_call("keypoints")
   qa_text, qa_usage = _unwrap_call("qa")
+  design_brief_text, design_brief_usage = _unwrap_call("design_brief")
   entity_list, entity_usage = _unwrap_entities()
-  usages = [chapters_usage, glossary_usage, keypoints_usage, qa_usage, entity_usage]
+  usages = [
+    chapters_usage, glossary_usage, keypoints_usage, qa_usage,
+    design_brief_usage, entity_usage,
+  ]
 
   if chapters_text:
     chapters_text = _validate_chapter_timestamps(chapters_text, max_seconds)
@@ -597,6 +706,7 @@ async def enhance_transcript(
     glossary_md=glossary_text,
     keypoints_md=keypoints_text,
     qa_md=qa_text,
+    design_brief_md=design_brief_text,
     keypoint_entities=entity_list,
     usage_input=total_in,
     usage_output=total_out,
